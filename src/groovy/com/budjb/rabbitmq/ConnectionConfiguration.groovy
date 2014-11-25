@@ -15,7 +15,13 @@
  */
 package com.budjb.rabbitmq
 
-import groovy.util.ConfigObject;
+import groovy.util.ConfigObject
+import net.jodah.lyra.ConnectionOptions
+import net.jodah.lyra.Connections
+import net.jodah.lyra.config.Config
+import net.jodah.lyra.config.RecoveryPolicy
+import net.jodah.lyra.util.Duration;
+
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import org.apache.log4j.Logger
@@ -61,6 +67,8 @@ class ConnectionConfiguration {
      */
     public int threads = 0
 
+    ConnectionOptions connectionOptions
+
     /**
      * Constructor that parses the configuration for RabbitMQ's connection properties.
      *
@@ -86,6 +94,20 @@ class ConnectionConfiguration {
         if (!host || !username || !password) {
             throw new Exception('The host, username, and password configuration options are required for RabbitMQ')
         }
+
+        ExecutorService executorService
+        if (threads >0 )
+            executorService = Executors.newFixedThreadPool(threads)
+        else
+            executorService = Executors.newCachedThreadPool()
+
+        connectionOptions = new ConnectionOptions()
+        connectionOptions.withPort(port)
+        .withAddresses(host)
+        .withUsername(username)
+        .withPassword(password)
+        .withVirtualHost(virtualHost)
+        .withConsumerExecutor(executorService)
     }
 
     /**
@@ -94,25 +116,12 @@ class ConnectionConfiguration {
      * @return
      */
     public Connection getConnection() {
-        // Create the connection factory
-        ConnectionFactory factory = new ConnectionFactory()
-
-        // Configure it
-        factory.username = username
-        factory.password = password
-        factory.port = port
-        factory.host = host
-        factory.virtualHost = virtualHost
-
-        // Create the thread pool service
-        ExecutorService executorService
-        if (threads > 0) {
-            executorService = Executors.newFixedThreadPool(threads)
-        }
-        else {
-            executorService = Executors.newCachedThreadPool()
-        }
-
-        return factory.newConnection(executorService)
+        Config config = new Config().
+                withRecoveryPolicy(new RecoveryPolicy()
+                        .withMaxAttempts(10)
+                        .withInterval(Duration.seconds(1))
+                        .withMaxDuration(Duration.minutes(5))
+                )
+        return Connections.create(connectionOptions,config)
     }
 }
