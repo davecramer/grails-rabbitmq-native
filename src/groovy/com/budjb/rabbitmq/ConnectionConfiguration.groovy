@@ -67,6 +67,8 @@ class ConnectionConfiguration {
      */
     public int threads = 0
 
+    public RecoveryPolicy recoveryPolicy
+
     ConnectionOptions connectionOptions
 
     /**
@@ -95,6 +97,18 @@ class ConnectionConfiguration {
             throw new Exception('The host, username, and password configuration options are required for RabbitMQ')
         }
 
+        if ( configuration.recoveryPolicy )
+        {
+            int maxAttempts = configuration.recoveryPolicy.maxAttempts ?: 10
+            int interval    = configuration.recoveryPolicy.interval ?: 1
+            int duration    = configuration.recoveryPolicy.duration ?: 5
+
+            recoveryPolicy = new RecoveryPolicy()
+                    .withMaxAttempts(maxAttempts)
+                    .withInterval(Duration.seconds(interval))
+                    .withMaxDuration(Duration.minutes(duration))
+        }
+
         ExecutorService executorService
         if (threads >0 )
             executorService = Executors.newFixedThreadPool(threads)
@@ -116,12 +130,7 @@ class ConnectionConfiguration {
      * @return
      */
     public Connection getConnection() {
-        Config config = new Config().
-                withRecoveryPolicy(new RecoveryPolicy()
-                        .withMaxAttempts(10)
-                        .withInterval(Duration.seconds(1))
-                        .withMaxDuration(Duration.minutes(5))
-                )
+        Config config = new Config().withRecoveryPolicy(recoveryPolicy())
         return Connections.create(connectionOptions,config)
     }
 }
